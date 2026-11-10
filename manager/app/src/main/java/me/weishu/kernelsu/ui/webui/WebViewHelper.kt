@@ -153,7 +153,16 @@ internal suspend fun prepareWebView(
                             }
                         }
                     }
-                    return webViewAssetLoader.shouldInterceptRequest(url)
+                    webViewAssetLoader.shouldInterceptRequest(url)?.let { return it }
+                    // "ksu" is injected into every frame of this WebView. No resource —
+                    // script, iframe document, image, fetch/XHR, websocket upgrade, worker —
+                    // may load from anywhere outside the module's own webroot, full stop.
+                    // Modules that need external data use ksu.fetch() instead (see diff 2),
+                    // which never lets fetched content load as an executing resource.
+                    return WebResourceResponse(
+                        "text/plain", "utf-8", 403, "Forbidden",
+                        emptyMap(), ByteArrayInputStream(ByteArray(0))
+                    )
                 }
 
                 override fun doUpdateVisitedHistory(view: WebView?, url: String?, isReload: Boolean) {
@@ -161,6 +170,16 @@ internal suspend fun prepareWebView(
                     if (webUIState.isInsetsEnabled) webUIState.webView?.evaluateJavascript(webUIState.currentInsets.js, null)
                     view?.evaluateJavascript(loadDownloadJs(activity), null)
                     super.doUpdateVisitedHistory(view, url, isReload)
+                }
+
+                override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+                    val uri = request.url
+
+                    val isLocalWebUi = uri.scheme == "https" &&
+                                uri.host == WEB_DOMAIN &&
+                                (uri.port == -1 || uri.port == 443)
+
+                    return !isLocalWebUi
                 }
             }
 

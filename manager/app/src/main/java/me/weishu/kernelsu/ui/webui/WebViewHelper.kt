@@ -84,6 +84,7 @@ internal suspend fun prepareWebView(
 
         webUIState.moduleName = moduleInfo.name
         webUIState.modDir = "/data/adb/modules/${moduleId}"
+        webUIState.allowNetwork = moduleInfo.webuiNetwork
 
         val shell = createRootShell(true)
         webUIState.rootShell = shell
@@ -153,7 +154,18 @@ internal suspend fun prepareWebView(
                             }
                         }
                     }
-                    webViewAssetLoader.shouldInterceptRequest(url)?.let { return it }
+                    webViewAssetLoader.shouldInterceptRequest(url)?.let { response ->
+                        val header = (response.responseHeaders ?: emptyMap()) + mapOf(
+                            "Content-Security-Policy" to
+                                "default-src 'self'; script-src 'self'; object-src 'none';" +
+                                "frame-src 'self'; connect-src 'self'; base-uri 'none'"
+                        )
+                        return WebResourceResponse(
+                            response.mimeType, response.encoding,
+                            response.statusCode, response.reasonPhrase,
+                            header, response.data
+                        )
+                    }
                     // "ksu" is injected into every frame of this WebView. No resource —
                     // script, iframe document, image, fetch/XHR, websocket upgrade, worker —
                     // may load from anywhere outside the module's own webroot, full stop.

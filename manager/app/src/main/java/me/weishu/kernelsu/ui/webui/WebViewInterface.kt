@@ -393,6 +393,47 @@ class WebUIDownloadInterface(private val state: WebUIState) {
     }
 
     @JavascriptInterface
+    fun fetch(url: String, options: String?, callbackFunc: String) {
+        if (!state.allowNetwork) {
+            postFetchCallback(callbackFunc, -1, null, "network access not permitted; add webuiNetwork=true to module.prop")
+            return
+        }
+        val uri = runCatching { url.toUri() }.getOrNull()
+        if (uri == null || (uri.scheme != "http" && uri.scheme != "https")) {
+            postFetchCallback(callbackFunc, -1, null, "invalid url")
+            return
+        }
+        val opts = if (options == null) JSONObject() else JSONObject(options)
+        val method = opts.optString("method", "GET").uppercase()
+        runCatching {
+            val conn = (java.net.URL(url).openConnection() as java.net.HttpURLConnection).apply {
+                requestMethod = method
+                connectTimeout = 15_000
+                readTimeout = 15_000
+                opts.optJSONObject("headers")?.let { h ->
+                    h.keys().forEach { k -> setRequestProperty(k, h.getString(k)) }
+                }
+            }
+            val body = opts.optString("body", null)
+            if (body != null && method in setOf("POST", "PUT", "PATCH")) {
+                conn.doOutput = true
+                conn.outputStream.use { it.write(body.toByteArray()) }
+            }
+            val status = conn.responseCode
+            val text = (if (status in 200..299) conn.inputStream else conn.errorStream)
+                ?.bufferedReader()?.use { it.readText() } ?: ""
+            postFetchCallback(callbackFunc, status, text, null)
+        }.onFailure { e -> postFetchCallback(callbackFunc, -1, null, e.message ?: "fetch failed") }
+    }
+
+        private fun postFetchCallback(callbackFunc: String, code: Int, data: String?, error: String?) {
+                val jsCode = "javascript: (function() { try { ${callbackFunc}(${code}, ${
+                        JSONObject.quote(data ?: "")
+                    }, ${JSONObject.quote(error ?: "")}); } catch(e) { console.error(e); } })();"
+                webView?.post { webView?.loadUrl(jsCode) }
+            }
+
+    @JavascriptInterface
     fun startChunkedDownload(fileName: String?, mimeType: String?): String {
         val currentWebView = webView ?: return ""
         val sanitizedFileName = sanitizeWebUIDownloadFileName(fileName)

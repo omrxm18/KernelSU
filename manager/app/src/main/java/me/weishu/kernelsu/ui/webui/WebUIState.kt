@@ -30,6 +30,7 @@ class WebUIState {
     var downloadInterface: WebUIDownloadInterface? = null
     lateinit var modDir: String
     var moduleName: String = ""
+    var allowNetwork: Boolean = false
 
     var uiEvent by mutableStateOf<WebUIEvent>(WebUIEvent.Loading)
     var isUrlLoaded = false

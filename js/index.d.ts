@@ -9,8 +9,22 @@ interface ExecResults {
     stderr: string
 }
 
+interface FetchOptions {
+    method?: string,
+    headers?: { [key: string]: string },
+    body?: string
+}
+
+interface FetchResult {
+    status: number,
+    data: string
+}
+
 declare function exec(command: string): Promise<ExecResults>;
 declare function exec(command: string, options: ExecOptions): Promise<ExecResults>;
+
+declare function fetch(url: string): Promise<FetchResult>;
+declare function fetch(url: string, options: FetchOptions): Promise<FetchResult>;
 
 interface SpawnOptions {
     cwd?: string,
@@ -183,6 +197,7 @@ export {
     exec,
     spawn,
     fullScreen,
+    fetch,
     enableEdgeToEdge,
     toast,
     moduleInfo,

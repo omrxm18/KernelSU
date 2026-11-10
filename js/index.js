@@ -11,7 +11,7 @@ export function exec(command, options) {
   return new Promise((resolve, reject) => {
     // Generate a unique callback function name
     const callbackFuncName = getUniqueCallbackName("exec");
-
+    
     // Define the success callback function
     window[callbackFuncName] = (errno, stdout, stderr) => {
       resolve({ errno, stdout, stderr });
@@ -24,6 +24,36 @@ export function exec(command, options) {
 
     try {
       ksu.exec(command, JSON.stringify(options), callbackFuncName);
+    } catch (error) {
+      reject(error);
+      cleanup(callbackFuncName);
+    }
+  });
+}
+
+export function fetch(url, options) {
+  if (typeof options === "undefined") {
+    options = {};
+  }
+
+  return new Promise((resolve, reject) => {
+    const callbackFuncName = getUniqueCallbackName("fetch");
+
+    window[callbackFuncName] = (status, data, error) => {
+      cleanup(callbackFuncName);
+      if (status === -1) {
+        reject(new Error(error || "fetch failed"));
+      } else {
+        resolve({ status, data });
+      }
+    };
+
+    function cleanup(name) {
+      delete window[name];
+    }
+
+    try {
+      ksu.fetch(url, JSON.stringify(options), callbackFuncName);
     } catch (error) {
       reject(error);
       cleanup(callbackFuncName);
